@@ -22,10 +22,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.CertificateFactory;
@@ -315,17 +312,93 @@ public class HttpsSupport {
     }
 
     public static void main(String[] args) throws InvalidKeySpecException, NoSuchAlgorithmException, IOException {
+        String ss = "-----BEGIN RSA PRIVATE KEY-----\n" +
+                "Proc-Type: 4,ENCRYPTED\n" +
+                "DEK-Info: DES-EDE3-CBC,21A39AFB00E0058C\n" +
+                "\n" +
+                "ztzsjlb0LR9r5kxejXqfcx0C8IQjBUfRxBnTbAtFzjYsfSfBhYR4VS7TxsjQ6gnU\n" +
+                "iwPz0qeJO3PDmHY9C3qDAv3VDfMuvh+HLS6gCMtYNGICkstA/8JjImzhnE/DWf8l\n" +
+                "ecPfgPfQVSLD6BhHN2daPQucIJ5eWoty76S+bSULb2HPsYSfW9qfsHlIEE+/XsPW\n" +
+                "CssG/8Adh2SvZrg7qeIaD4WP0piC/277C+qZwbvGvvBBv4llOmAWfLci0OmW3v1f\n" +
+                "jYwmvedGZAj0kbZJevjstD544Qz72q3TPep8+8ZzSKl1QixTquaoYLJCNATCJjXE\n" +
+                "/J0qMuV4PTTpG7PYJhgSU6qDi2nzGeJOyXLHjlpBXd1lrkNCY+GQOesBbH5PQtxQ\n" +
+                "kyCFFyomxsTjScrt8FoocBOi6jbKjW7gRr8IuHuK4WhGqT59cgQnbq+CoxJBDUCq\n" +
+                "NQn0NHoz55h3wiwxLcZ6vkwBOYjQ9OsWAM5B6kr3bepytxdmDdHjxw48+M3b+DPs\n" +
+                "H3zY4CtS2QUi1Icch+QVh6/QCvFJiJy4ns7Ju3fdQtCm3VW0MfntieN8H+GQA9Qp\n" +
+                "+PcO7v/fDEMuelZY+rA5yeMFGiM5/4NHf7qhfZEcNGagzCvZLVkttCU9znOgFAtp\n" +
+                "wcL1nOEIWaX2parO58J2f4B1yXHL9rWpo7XN6fFVbpEwIY3yDs+pLKBwzvjA04fu\n" +
+                "bOQhQkH991JpPGHi55fCf0KyA5ikTqijM1ZRUUmYb1VvZ//XxJ28A2Rc1od2JZ5E\n" +
+                "Ql8mhwS09iFGoE7ApzeZP2P1wn7lAfeuAeqDh/dvIk4HCTJDlwLvwBFccOXVe1sl\n" +
+                "7B4vqYJArl1sdV6rVbhb6kWwmAl9ES+AtRFblGykeZptvaVOzjnDp8FL0XQt2/No\n" +
+                "cAff50/oup4YXt4fR/mnNd5ub8NfypgBcW0BX+1Si2c32vyeqJ6Mm/aXyJynN6if\n" +
+                "34tUcROA41V8g68mPSx1FAjasENoz6J6+nTHnukJjL5m0X2rtzWbi+CrQBEY3Ec4\n" +
+                "Le5a/PGnJypCPsaqfgGGcsawRClQ1TFptRuBklKsW497JkHY4zvaumK1DfTlWNS1\n" +
+                "76KhwKVF3Rx4TpInFbDWeVA1NDcOA+PNc30KoWuOP2jD+zDA5tIfYn9MZZDN31gh\n" +
+                "YmC7cxWzXppZZ+M69k0I3VgqRvZuLx59cGZ5hYy/Ih8TXsHOdN6S1SWtSn9n79d5\n" +
+                "wNdyWsaKXujo2yfdfmOCv+1KLbdCBOSW92MtUjuaPXYfR9WMZtKetYO6PvhOTxTP\n" +
+                "rDIlbjnrxUdveZ4VR0tVOqgDQwM7ynZ7AnXfl6a/8EGUhsmahBGhsvLmVVB/psDj\n" +
+                "H8WQazAVmur8q/+Y1127Q163R+edrfH9Ug8Qp1VaDdgRMzeR+hbeSWOtZYExGE6U\n" +
+                "siJ2Jr/vFrr6QkZt9iAhXEwJVG3W+RKTpAMgnBA/hqcAo6d2ev+5+Me4thjU0BEC\n" +
+                "2IRs1wvLIlJ3wYjFlUwsph4KMh3zvIx5MmK1os37mmyge2sl8/9fcGMZksVQ1PRb\n" +
+                "lG6bBhq0XMAAqiWlXjxBhtPfqPoNdimfqNJhBGKwFPuljoieG/mS4A==\n" +
+                "-----END RSA PRIVATE KEY-----";
         getPrivateKey();
+    }
+    public static PrivateKey getPrivateKey(String base64PrivateKey) {
+        PrivateKey privateKey = null;
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(base64PrivateKey.getBytes()));
+        KeyFactory keyFactory = null;
+        try {
+            keyFactory = KeyFactory.getInstance("RSA");
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        try {
+            privateKey = keyFactory.generatePrivate(keySpec);
+        } catch (InvalidKeySpecException e) {
+            e.printStackTrace();
+        }
+        return privateKey;
     }
 
     public static PrivateKey getPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException, IOException {
         Security.addProvider(new BouncyCastleProvider());
-
+        String ss = "-----BEGIN RSA PRIVATE KEY-----\n" +
+                "Proc-Type: 4,ENCRYPTED\n" +
+                "DEK-Info: DES-EDE3-CBC,21A39AFB00E0058C\n" +
+                "\n" +
+                "ztzsjlb0LR9r5kxejXqfcx0C8IQjBUfRxBnTbAtFzjYsfSfBhYR4VS7TxsjQ6gnU\n" +
+                "iwPz0qeJO3PDmHY9C3qDAv3VDfMuvh+HLS6gCMtYNGICkstA/8JjImzhnE/DWf8l\n" +
+                "ecPfgPfQVSLD6BhHN2daPQucIJ5eWoty76S+bSULb2HPsYSfW9qfsHlIEE+/XsPW\n" +
+                "CssG/8Adh2SvZrg7qeIaD4WP0piC/277C+qZwbvGvvBBv4llOmAWfLci0OmW3v1f\n" +
+                "jYwmvedGZAj0kbZJevjstD544Qz72q3TPep8+8ZzSKl1QixTquaoYLJCNATCJjXE\n" +
+                "/J0qMuV4PTTpG7PYJhgSU6qDi2nzGeJOyXLHjlpBXd1lrkNCY+GQOesBbH5PQtxQ\n" +
+                "kyCFFyomxsTjScrt8FoocBOi6jbKjW7gRr8IuHuK4WhGqT59cgQnbq+CoxJBDUCq\n" +
+                "NQn0NHoz55h3wiwxLcZ6vkwBOYjQ9OsWAM5B6kr3bepytxdmDdHjxw48+M3b+DPs\n" +
+                "H3zY4CtS2QUi1Icch+QVh6/QCvFJiJy4ns7Ju3fdQtCm3VW0MfntieN8H+GQA9Qp\n" +
+                "+PcO7v/fDEMuelZY+rA5yeMFGiM5/4NHf7qhfZEcNGagzCvZLVkttCU9znOgFAtp\n" +
+                "wcL1nOEIWaX2parO58J2f4B1yXHL9rWpo7XN6fFVbpEwIY3yDs+pLKBwzvjA04fu\n" +
+                "bOQhQkH991JpPGHi55fCf0KyA5ikTqijM1ZRUUmYb1VvZ//XxJ28A2Rc1od2JZ5E\n" +
+                "Ql8mhwS09iFGoE7ApzeZP2P1wn7lAfeuAeqDh/dvIk4HCTJDlwLvwBFccOXVe1sl\n" +
+                "7B4vqYJArl1sdV6rVbhb6kWwmAl9ES+AtRFblGykeZptvaVOzjnDp8FL0XQt2/No\n" +
+                "cAff50/oup4YXt4fR/mnNd5ub8NfypgBcW0BX+1Si2c32vyeqJ6Mm/aXyJynN6if\n" +
+                "34tUcROA41V8g68mPSx1FAjasENoz6J6+nTHnukJjL5m0X2rtzWbi+CrQBEY3Ec4\n" +
+                "Le5a/PGnJypCPsaqfgGGcsawRClQ1TFptRuBklKsW497JkHY4zvaumK1DfTlWNS1\n" +
+                "76KhwKVF3Rx4TpInFbDWeVA1NDcOA+PNc30KoWuOP2jD+zDA5tIfYn9MZZDN31gh\n" +
+                "YmC7cxWzXppZZ+M69k0I3VgqRvZuLx59cGZ5hYy/Ih8TXsHOdN6S1SWtSn9n79d5\n" +
+                "wNdyWsaKXujo2yfdfmOCv+1KLbdCBOSW92MtUjuaPXYfR9WMZtKetYO6PvhOTxTP\n" +
+                "rDIlbjnrxUdveZ4VR0tVOqgDQwM7ynZ7AnXfl6a/8EGUhsmahBGhsvLmVVB/psDj\n" +
+                "H8WQazAVmur8q/+Y1127Q163R+edrfH9Ug8Qp1VaDdgRMzeR+hbeSWOtZYExGE6U\n" +
+                "siJ2Jr/vFrr6QkZt9iAhXEwJVG3W+RKTpAMgnBA/hqcAo6d2ev+5+Me4thjU0BEC\n" +
+                "2IRs1wvLIlJ3wYjFlUwsph4KMh3zvIx5MmK1os37mmyge2sl8/9fcGMZksVQ1PRb\n" +
+                "lG6bBhq0XMAAqiWlXjxBhtPfqPoNdimfqNJhBGKwFPuljoieG/mS4A==\n" +
+                "-----END RSA PRIVATE KEY-----";
         // reads your key file
-
+        Reader privateKeyReader = new StringReader(ss);
+        PEMParser privatePemParser = new PEMParser(privateKeyReader);
         PEMParser pemParser = new PEMParser(new FileReader("E:\\nettycode\\easyHttpProxy\\src\\main\\resources\\ca.key"));
 
-        Object object = pemParser.readObject();
+        Object object = privatePemParser.readObject();
 
         JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
 
@@ -356,11 +429,11 @@ public class HttpsSupport {
 // RSA
 
         KeyFactory keyFac = KeyFactory.getInstance("RSA");
-        PrivateKey ss = kp.getPrivate();
+        PrivateKey privateKey = kp.getPrivate();
 
-        System.out.println(ss);
+        System.out.println(privateKey);
 
-        return ss;
+        return privateKey;
 
     }
 }
