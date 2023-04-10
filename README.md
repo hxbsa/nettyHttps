@@ -3,7 +3,7 @@
 [![blog](https://img.shields.io/badge/blog-csdn-brightgreen)](https://blog.csdn.net/puhaiyang)
 [![License](https://img.shields.io/github/license/puhaiyang/easyHttpProxy)](https://github.com/puhaiyang/easyHttpProxy/blob/master/LICENSE)
 
-support http/https proxy.类似于fiddler,由java编写，代码简单便于理解。支持http/https代理！
+hanxiaobo测试测试测试测试测试！
 
 ## 环境
 [![jdk](https://img.shields.io/badge/jdk-1.8%2B-brightgreen)](https://github.com/puhaiyang)
