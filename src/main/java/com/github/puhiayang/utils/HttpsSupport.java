@@ -1,6 +1,5 @@
 package com.github.puhiayang.utils;
 
-import com.github.puhiayang.EasyHttpProxyServer;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -11,18 +10,29 @@ import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMDecryptorProvider;
+import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMKeyPair;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.EncodedKeySpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -100,7 +110,8 @@ public class HttpsSupport {
             //从项目目录加入ca根证书
             X509Certificate caCert = loadCert(classLoader.getResourceAsStream("ca.crt"));
             //从项目目录加入ca私钥
-            PrivateKey caPriKey = loadPriKey(classLoader.getResourceAsStream("ca_private.der"));
+            //PrivateKey caPriKey = loadPriKey(classLoader.getResourceAsStream("ca_private.der"));
+            PrivateKey caPriKey = getPrivateKey();
             setCaPriKey(caPriKey);
             //从证书中获取使用者信息
             setIssuer(getSubjectByCert(caCert));
@@ -301,5 +312,55 @@ public class HttpsSupport {
         //SHA256 用SHA1浏览器可能会提示证书不安全
         ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSAEncryption").build(caPriKey);
         return new JcaX509CertificateConverter().getCertificate(jv3Builder.build(signer));
+    }
+
+    public static void main(String[] args) throws InvalidKeySpecException, NoSuchAlgorithmException, IOException {
+        getPrivateKey();
+    }
+
+    public static PrivateKey getPrivateKey() throws InvalidKeySpecException, NoSuchAlgorithmException, IOException {
+        Security.addProvider(new BouncyCastleProvider());
+
+        // reads your key file
+
+        PEMParser pemParser = new PEMParser(new FileReader("E:\\nettycode\\easyHttpProxy\\src\\main\\resources\\ca.key"));
+
+        Object object = pemParser.readObject();
+
+        JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
+
+        KeyPair kp = null;
+
+        if (object instanceof PEMEncryptedKeyPair) {
+
+// Encrypted key - we will use provided password
+
+            PEMEncryptedKeyPair ckp = (PEMEncryptedKeyPair) object;
+
+// uses the password to decrypt the key
+//
+            PEMDecryptorProvider decProv = new JcePEMDecryptorProviderBuilder().build("snetty".toCharArray());
+
+            kp = converter.getKeyPair(ckp.decryptKeyPair(decProv));
+
+        } else {
+
+// Unencrypted key - no password needed
+
+            PEMKeyPair ukp = (PEMKeyPair) object;
+
+            kp = converter.getKeyPair(ukp);
+
+        }
+
+// RSA
+
+        KeyFactory keyFac = KeyFactory.getInstance("RSA");
+        PrivateKey ss = kp.getPrivate();
+
+        System.out.println(ss);
+
+        return ss;
+
     }
 }
