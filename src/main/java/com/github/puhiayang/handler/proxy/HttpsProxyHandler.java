@@ -17,19 +17,24 @@ import io.netty.handler.codec.http.*;
 
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.stream.ChunkedFile;
 import io.netty.util.Attribute;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import sun.awt.image.ImageDecoder;
-
-import javax.annotation.PostConstruct;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.net.URLEncoder;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 import static com.github.puhiayang.bean.Constans.CLIENTREQUEST_ATTRIBUTE_KEY;
 
@@ -47,7 +52,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
     private String uri;
     private HttpHeaders headers;
     private boolean isCache;
-    private ByteBuf buf =  ByteBufAllocator.DEFAULT.buffer();
+    private ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -56,38 +61,40 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
         Attribute<ClientRequest> clientRequestAttribute = ctx.channel().attr(CLIENTREQUEST_ATTRIBUTE_KEY);
         ClientRequest clientRequest = clientRequestAttribute.get();
         if (msg instanceof HttpRequest) {
-            HttpRequest req = (HttpRequest)msg;
+            HttpRequest req = (HttpRequest) msg;
             method = req.method();
             uri = req.uri();
             headers = req.headers();
             // 判断是否走缓存
             isCache = isCache(req);
-            if(isCache){
+            isCache = true;
+            if (isCache) {
                 // 走缓存，构建http相应信息
-                FullHttpResponse rsp = getResponseCache(req);
-                ctx.channel().writeAndFlush(rsp);
+//                FullHttpResponse rsp = getResponseCache(req);
+//                ctx.channel().writeAndFlush(rsp);
+                returnStaticFile(req, ctx);
             }
-            if(StringUtils.isEmpty(headers.get("Content-Length"))) {
-                sendToServer(clientRequest, ctx, msg);
-            }
+//            if (StringUtils.isEmpty(headers.get("Content-Length"))) {
+//                sendToServer(clientRequest, ctx, msg);
+//            }
         } else if (msg instanceof HttpContent) {
-            logger.debug("接收HttpContent···");
-            if(!isCache) {
-                HttpContent httpContent = (HttpContent)msg;
-                ByteBuf bufCont = httpContent.content();
-                String sBody = NettyUtil.byteBufToString(bufCont);
-                buf = Unpooled.wrappedBuffer(buf, bufCont);
-                if(msg instanceof DefaultLastHttpContent && !StringUtils.isEmpty(sBody)) {
-                    String url = "https://" + clientRequest.getHost() + uri;
-                    FullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, url);
-                    req.headers().set(headers);
-                    if(method.equals(HttpMethod.POST)){
-                        req .setMethod(HttpMethod.POST);
-                        req.content().clear().writeBytes(buf);
-                    }
-                    sendToServerBody(clientRequest, ctx, msg, req);
-                }
-            }
+//            logger.debug("接收HttpContent···");
+//            if (!isCache) {
+//                HttpContent httpContent = (HttpContent) msg;
+//                ByteBuf bufCont = httpContent.content();
+//                String sBody = NettyUtil.byteBufToString(bufCont);
+//                buf = Unpooled.wrappedBuffer(buf, bufCont);
+//                if (msg instanceof DefaultLastHttpContent && !StringUtils.isEmpty(sBody)) {
+//                    String url = "https://" + clientRequest.getHost() + uri;
+//                    FullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, url);
+//                    req.headers().set(headers);
+//                    if (method.equals(HttpMethod.POST)) {
+//                        req.setMethod(HttpMethod.POST);
+//                        req.content().clear().writeBytes(buf);
+//                    }
+//                    sendToServerBody(clientRequest, ctx, msg, req);
+//                }
+//            }
         } else {
             ByteBuf byteBuf = (ByteBuf) msg;
             // ssl握手
@@ -96,6 +103,67 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
                 sendToClient(clientRequest, ctx, msg);
             }
         }
+    }
+
+    public void returnStaticFile(HttpRequest req, ChannelHandlerContext ctx) throws Exception {
+        logger.info("进入range-----");
+        if (req.headers().contains(HttpHeaderNames.RANGE)) {
+            // 处理206探测请求
+            HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.PARTIAL_CONTENT);
+            RandomAccessFile file = new RandomAccessFile("E:\\cache\\ext\\video\\ddd", "r");
+            long fileSize = file.length();
+            String range = req.headers().get(HttpHeaderNames.RANGE);
+            long start = Long.parseLong(range.substring(range.indexOf("=") + 1, range.indexOf("-")));
+            long end = fileSize - 1;
+            if (range.endsWith("-")) {
+                end = fileSize - 1;
+            } else {
+                end = Long.parseLong(range.substring(range.indexOf("-") + 1));
+            }
+            long contentLength = end - start + 1;
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
+            response.headers().set(HttpHeaderNames.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + fileSize);
+            ctx.write(response);
+            ChannelFuture sendFileFuture = ctx.write(new ChunkedFile(file, start, contentLength, 8192), ctx.newProgressivePromise());
+            sendFileFuture.addListener(new ChannelProgressiveFutureListener() {
+                @Override
+                public void operationProgressed(ChannelProgressiveFuture future, long progress, long total) throws Exception {
+                    if (total < 0) {
+                        //System.err.println("Transfer progress: " + progress);
+                    } else {
+                        //System.err.println("Transfer progress: " + progress + " / " + total);
+                    }
+                }
+
+                @Override
+                public void operationComplete(ChannelProgressiveFuture future) throws Exception {
+                    file.close();
+                }
+            });
+            ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+        }
+    }
+
+    public static boolean isHttps(ChannelHandlerContext ctx) {
+        if (ctx.pipeline().get(SslHandler.class) != null) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 设置通用响应headers
+     *
+     * @param response
+     */
+    private static void setServerHeaders(HttpResponse response) {
+        HttpHeaders headers = response.headers();
+        headers.set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+        headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+        headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, true);
+        headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,OPTIONS");
+        headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, "origin,accept,cookieId,authorization,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,content-length");
+        headers.set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, 86400);
     }
 
     public void sendToServerBody(ClientRequest clientRequest, ChannelHandlerContext ctx, Object msg, FullHttpRequest req) {
@@ -122,7 +190,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
                 });
         httpsRequestCf = bootstrap.connect(clientRequest.getHost(), clientRequest.getPort());
         //建立连接
-         httpsRequestCf.addListener((ChannelFutureListener) future -> {
+        httpsRequestCf.addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
                 future.channel().writeAndFlush(req);
                 logger.debug("https建立连接成功------");
@@ -150,6 +218,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
                                 HttpsSupport.getInstance().getClientSslCtx().newHandler(ch.alloc(),
                                         clientRequest.getHost(), clientRequest.getPort()));
                         ch.pipeline().addLast("httpCodec", new HttpClientCodec());
+                        ch.pipeline().addLast("httpAggregator", new HttpObjectAggregator(1000 * 1000 * 1024));
                         //添加响应处理器
                         ch.pipeline().addLast("proxyClientHandle", new HttpProxyResponseHandler(clientChannel));
                     }
@@ -187,7 +256,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
             //发送响应给客户端，并将发送内容编码
             ctx.pipeline().addFirst("httpResponseEncoder", new HttpResponseEncoder());
             //http聚合
-            ctx.pipeline().addLast("httpAggregator", new HttpObjectAggregator(10*10*1024));
+            ctx.pipeline().addLast("httpAggregator", new HttpObjectAggregator(10 * 10 * 1024));
             //ssl处理
             ctx.pipeline().addFirst("sslHandle", sslCtx.newHandler(ctx.alloc()));
             // 重新过一遍pipeline，拿到解密后的的http报文
@@ -202,12 +271,12 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
 
     public boolean isCache(HttpRequest req) {
         boolean isCache = false;
-        if(req.uri().equals("/")) {
+        if (req.uri().equals("/")) {
             return false;
         }
         String localPath = getLocalPath(req);
         File file = new File(localPath);
-        if(file.exists()) {
+        if (file.exists()) {
             isCache = true;
         }
         return isCache;
@@ -218,7 +287,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
         FullHttpResponse rsp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
         // 处理图片
         //String jsPath = "E:\\cache\\ext\\antidomxss_v640.js";
-        //String pngPath = "E:\\cache\\ext\\20220107105619.png";
+        //String pngPath = "E:\\cache\\ext\\video\\V-116823-16A45202";
         // content-type
         String centType = "";
         String hostUrl = StringUtils.substringBefore(req.uri(), "?");
@@ -229,9 +298,9 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
             }
         }
         String localPath = getLocalPath(req);
-        File file = new File(localPath);
+        File file = new File("");
         //缓存
-        int bufferSize = (int)file.length();
+        int bufferSize = (int) file.length();
         FileInputStream fis = new FileInputStream(file);
         byte[] data = new byte[bufferSize];
         int len = 0;
@@ -240,8 +309,9 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
         }
         fis.close();
         rsp.content().clear().writeBytes(data);
-        rsp.headers().set(HttpHeaderNames.CONTENT_TYPE, centType);
-        rsp.headers().set(HttpHeaderNames.CONTENT_LENGTH, (int)file.length());
+        int size = (int) file.length();
+        rsp.headers().set(HttpHeaderNames.CONTENT_TYPE, "video/mp4");
+        rsp.headers().set(HttpHeaderNames.CONTENT_LENGTH, (int) file.length());
         return rsp;
     }
 
@@ -251,7 +321,7 @@ public class HttpsProxyHandler extends ChannelInboundHandlerAdapter implements I
         System.out.println(fileSurf);
     }
 
-    public String getLocalPath(HttpRequest req){
+    public String getLocalPath(HttpRequest req) {
         String proPath = StringUtils.substringBefore(System.getProperty("user.dir"), "\\") + "/";
         String localPath = proPath + "cache/ext" + req.uri();
         return localPath;

@@ -18,6 +18,7 @@ import io.netty.handler.codec.http.cors.CorsConfigBuilder;
 import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +80,7 @@ public class EasyHttpProxyServer {
 
                             ch.pipeline().addLast("httpAggregator", new HttpObjectAggregator(10*10*1024));
                             ch.pipeline().addLast("httpProxyHandler", new HttpProxyHandler());
+                            ch.pipeline().addLast("streamer", new ChunkedWriteHandler());
                             ch.pipeline().addLast("httpsProxyHandler", new HttpsProxyHandler());
                             CorsConfig corsConfig = CorsConfigBuilder.forAnyOrigin().allowNullOrigin().allowCredentials().build();
                             ch.pipeline().addLast(new CorsHandler(corsConfig));
